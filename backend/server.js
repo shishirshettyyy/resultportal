@@ -1,4 +1,3 @@
-// server.js
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
@@ -48,7 +47,8 @@ const sessionalMarksSchema = new mongoose.Schema({
   semester: { type: String, required: true },
   branch: { type: String, required: true },
   subjectName: { type: String, required: true },
-  marks: { type: Number, required: true },
+  marks: { type: Number, required: true, min: 0, max: 100 },
+  sessionalType: { type: String, required: true, enum: ['Sessional 1', 'Sessional 2', 'Sessional 3'] },
   status: { type: String, default: 'Pending', enum: ['Pending', 'Approved', 'Rejected'] },
 });
 const SessionalMarks = mongoose.model('SessionalMarks', sessionalMarksSchema);
@@ -73,9 +73,31 @@ const transporter = nodemailer.createTransport({
 // Hardcoded Admin
 const adminCredentials = { username: 'admin', password: 'admin123' };
 
+// Setup Default Lecturers
+const setupDefaultLecturers = async () => {
+  try {
+    const lecturerCount = await Lecturer.countDocuments();
+    if (lecturerCount === 0) {
+      const lecturers = [
+        { email: "lecturer1@college.com", password: await bcrypt.hash("password1", 10), name: "Lecturer One", lecturerId: "L001" },
+        { email: "lecturer2@college.com", password: await bcrypt.hash("password2", 10), name: "Lecturer Two", lecturerId: "L002" },
+        { email: "lecturer3@college.com", password: await bcrypt.hash("password3", 10), name: "Lecturer Three", lecturerId: "L003" },
+        { email: "lecturer4@college.com", password: await bcrypt.hash("password4", 10), name: "Lecturer Four", lecturerId: "L004" },
+      ];
+      await Lecturer.insertMany(lecturers);
+      console.log("Default lecturers created successfully");
+    } else {
+      console.log("Lecturers already exist in the database");
+    }
+  } catch (err) {
+    console.error("Error setting up default lecturers:", err);
+  }
+};
+
+mongoose.connection.once('open', setupDefaultLecturers);
+
 // Routes
 app.post('/admin/login', (req, res) => {
-  console.log('Admin login attempt:', req.body);
   const { username, password } = req.body;
   if (username === adminCredentials.username && password === adminCredentials.password) {
     res.json({ success: true });
@@ -83,8 +105,6 @@ app.post('/admin/login', (req, res) => {
     res.json({ success: false, message: 'Invalid credentials' });
   }
 });
-
-// Removed /results/add since results are auto-generated
 
 app.post('/results/bulk-upload', async (req, res) => {
   const { csvData } = req.body;
@@ -153,7 +173,7 @@ app.post('/lecturer/login', async (req, res) => {
 });
 
 app.post('/lecturer/sessional/add', authenticateLecturer, async (req, res) => {
-  const { registerNumber, semester, branch, subjectName, marks } = req.body;
+  const { registerNumber, semester, branch, subjectName, marks, sessionalType } = req.body;
   const sessionalMarks = new SessionalMarks({
     lecturerId: req.lecturer.id,
     registerNumber,
@@ -161,6 +181,7 @@ app.post('/lecturer/sessional/add', authenticateLecturer, async (req, res) => {
     branch,
     subjectName,
     marks,
+    sessionalType,
   });
   await sessionalMarks.save();
   res.json({ message: 'Sessional marks added' });
@@ -173,55 +194,50 @@ app.get('/admin/sessional/pending', async (req, res) => {
 
 app.put('/admin/sessional/approve/:id', async (req, res) => {
   const sessional = await SessionalMarks.findByIdAndUpdate(req.params.id, { status: 'Approved' }, { new: true });
-  
-  // Auto-generate or update result
-  const { registerNumber, semester, branch, subjectName, marks } = sessional;
+
+  const { registerNumber, semester, branch, subjectName, marks, sessionalType } = sessional;
   const approvedMarks = await SessionalMarks.find({ 
     registerNumber, 
     semester, 
     branch, 
     status: 'Approved' 
   });
-  
+
   const subjects = approvedMarks.map(mark => ({
-    subjectName: mark.subjectName,
+    subjectName: `${mark.subjectName} (${mark.sessionalType})`,
     marks: mark.marks,
   }));
-  const totalMarks = subjects.reduce((sum, subj) => sum + subj.marks, 0);
-  const percentage = (totalMarks / (subjects.length * 100)) * 100; // Assumes 100 max per subject
-  const status = percentage >= 40 ? 'Pass' : 'Fail';
 
-  // Find existing result or create new
-  let result = await Result.findOne({ registerNumber, semester, branch });
-  if (result) {
-    result.subjects = subjects;
-    result.totalMarks = totalMarks;
-    result.percentage = percentage;
-    result.status = status;
-    await result.save();
-  } else {
-    result = new Result({
-      name: registerNumber, // Replace with actual student name if available
-      registerNumber,
-      semester,
-      branch,
-      subjects,
-      totalMarks,
-      percentage,
-      status,
+  let result;
+  if (subjects.length === 4) {
+    const totalMarks = subjects.reduce((sum, subj) => sum + subj.marks, 0);
+    const percentage = (totalMarks / 400) * 100; // 4 subjects * 100 marks = 400
+    const status = percentage >= 40 ? 'Pass' : 'Fail';
+
+    result = await Result.findOneAndUpdate(
+      { registerNumber, semester, branch },
+      { 
+        name: registerNumber, // Replace with actual student name if available
+        registerNumber,
+        semester,
+        branch,
+        subjects,
+        totalMarks,
+        percentage,
+        status,
+      },
+      { upsert: true, new: true }
+    );
+
+    transporter.sendMail({
+      from: 'your-email@gmail.com',
+      to: `${registerNumber}@student.com`,
+      subject: 'Result Updated',
+      text: `Dear Student, your ${semester} result has been updated. Total: ${totalMarks}/400, Percentage: ${percentage}%`,
     });
-    await result.save();
   }
 
-  // Email Notification
-  transporter.sendMail({
-    from: 'your-email@gmail.com',
-    to: `${registerNumber}@student.com`,
-    subject: 'Result Updated',
-    text: `Dear Student, your ${semester} result has been updated. Total: ${totalMarks}, Percentage: ${percentage}%`,
-  });
-
-  res.json({ message: 'Sessional marks approved and result updated', sessional });
+  res.json({ message: 'Sessional marks approved', sessional, result: result || null });
 });
 
 app.put('/admin/sessional/reject/:id', async (req, res) => {

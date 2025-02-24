@@ -1,4 +1,3 @@
-// src/App.jsx
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { jsPDF } from 'jspdf';
@@ -27,6 +26,7 @@ function App() {
     branch: '',
     subjectName: '',
     marks: '',
+    sessionalType: 'Sessional 1',
   });
 
   // Fetch Dashboards
@@ -50,7 +50,7 @@ function App() {
       setLecturerStats(statsRes.data || []);
       const pendingRes = await axios.get('/api/admin/sessional/pending');
       setPendingMarks(pendingRes.data || []);
-      const resultsRes = await axios.post('/api/results/view', { registerNumber: '' }); // Fetch all results
+      const resultsRes = await axios.post('/api/results/view', { registerNumber: '' });
       setResults(Array.isArray(resultsRes.data) ? resultsRes.data : []);
       setError(null);
     } catch {
@@ -91,17 +91,14 @@ function App() {
   const handleAdminLogin = async (e) => {
     e.preventDefault();
     try {
-      console.log('Sending login request:', adminForm);
       const res = await axios.post('/api/admin/login', adminForm);
-      console.log('Response:', res.data);
       if (res.data.success) {
         setAdminLoggedIn(true);
         setError(null);
       } else {
         setError('Invalid credentials');
       }
-    } catch (err) {
-      console.error('Login error:', err.response || err);
+    } catch {
       setError('Login failed');
     }
   };
@@ -174,7 +171,7 @@ function App() {
         headers: { Authorization: `Bearer ${localStorage.getItem('lecturerToken')}` },
       });
       alert('Sessional marks submitted');
-      setSessionalForm({ registerNumber: '', semester: '', branch: '', subjectName: '', marks: '' });
+      setSessionalForm({ registerNumber: '', semester: '', branch: '', subjectName: '', marks: '', sessionalType: 'Sessional 1' });
       fetchLecturerDashboard();
       setError(null);
     } catch {
@@ -195,11 +192,14 @@ function App() {
 
   const generatePDF = (result) => {
     const doc = new jsPDF();
-    doc.text('Result', 10, 10);
+    doc.text(`Result for ${result.registerNumber} - Semester ${result.semester}`, 10, 10);
     doc.autoTable({
       head: [['Subject', 'Marks']],
       body: result.subjects.map(s => [s.subjectName, s.marks]),
     });
+    doc.text(`Total Marks: ${result.totalMarks}/400`, 10, doc.lastAutoTable.finalY + 10);
+    doc.text(`Percentage: ${result.percentage}%`, 10, doc.lastAutoTable.finalY + 20);
+    doc.text(`Status: ${result.status}`, 10, doc.lastAutoTable.finalY + 30);
     doc.save(`${result.registerNumber}_${result.semester}_result.pdf`);
   };
 
@@ -226,16 +226,32 @@ function App() {
               <input className="input-field" placeholder="Semester (optional)" value={studentForm.semester} onChange={e => setStudentForm({ ...studentForm, semester: e.target.value })} />
               <button className="submit-btn" type="submit">View Results</button>
             </form>
-            {results.length > 0 && (
+            {results.length > 0 ? (
               <div className="results-container">
                 <h3 className="subtitle">Your Results</h3>
                 {results.map(result => (
                   <div key={result._id} className="result-card">
-                    <p>Semester: {result.semester} | Total: {result.totalMarks} | Percentage: {result.percentage}%</p>
-                    <button className="action-btn" onClick={() => generatePDF(result)}>Download PDF</button>
+                    <p>Semester: {result.semester}</p>
+                    <ul>
+                      {result.subjects.map((subject, index) => (
+                        <li key={index}>{subject.subjectName}: {subject.marks}/100</li>
+                      ))}
+                    </ul>
+                    {result.subjects.length === 4 ? (
+                      <>
+                        <p>Total: {result.totalMarks}/400</p>
+                        <p>Percentage: {result.percentage}%</p>
+                        <p>Status: {result.status}</p>
+                        <button className="action-btn" onClick={() => generatePDF(result)}>Download PDF</button>
+                      </>
+                    ) : (
+                      <p>Result incomplete: Waiting for all 4 subjects to be approved.</p>
+                    )}
                   </div>
                 ))}
               </div>
+            ) : (
+              <p>No results available yet.</p>
             )}
           </section>
         )}
@@ -320,6 +336,7 @@ function App() {
                     <th>Register Number</th>
                     <th>Subject</th>
                     <th>Marks</th>
+                    <th>Sessional</th>
                     <th>Lecturer</th>
                     <th>Action</th>
                   </tr>
@@ -330,6 +347,7 @@ function App() {
                       <td>{mark.registerNumber}</td>
                       <td>{mark.subjectName}</td>
                       <td>{mark.marks}</td>
+                      <td>{mark.sessionalType}</td>
                       <td>{mark.lecturerId?.name || 'Unknown'}</td>
                       <td>
                         <button className="action-btn approve" onClick={() => handleApproval(mark._id, 'approve')}>Approve</button>
@@ -396,15 +414,28 @@ function App() {
                 <input className="input-field" placeholder="Semester" value={sessionalForm.semester} onChange={e => setSessionalForm({ ...sessionalForm, semester: e.target.value })} />
                 <input className="input-field" placeholder="Branch" value={sessionalForm.branch} onChange={e => setSessionalForm({ ...sessionalForm, branch: e.target.value })} />
                 <input className="input-field" placeholder="Subject Name" value={sessionalForm.subjectName} onChange={e => setSessionalForm({ ...sessionalForm, subjectName: e.target.value })} />
-                <input className="input-field" type="number" placeholder="Marks" value={sessionalForm.marks} onChange={e => setSessionalForm({ ...sessionalForm, marks: parseInt(e.target.value) || 0 })} />
+                <input className="input-field" type="number" placeholder="Marks (0-100)" value={sessionalForm.marks} onChange={e => setSessionalForm({ ...sessionalForm, marks: Math.min(100, Math.max(0, parseInt(e.target.value) || 0)) })} />
+                <select
+                  className="input-field"
+                  value={sessionalForm.sessionalType}
+                  onChange={e => setSessionalForm({ ...sessionalForm, sessionalType: e.target.value })}
+                >
+                  <option value="Sessional 1">Sessional 1</option>
+                  <option value="Sessional 2">Sessional 2</option>
+                  <option value="Sessional 3">Sessional 3</option>
+                </select>
                 <button className="submit-btn" type="submit">Submit Marks</button>
               </form>
             </div>
             <div className="table-section">
               <h3 className="subtitle">Your Submissions</h3>
-              <ul className="submission-list">{dashboardData.submittedMarks?.map(mark => (
-                <li key={mark._id}>{mark.registerNumber} - {mark.subjectName}: {mark.marks} ({mark.status})</li>
-              ))}</ul>
+              <ul className="submission-list">
+                {dashboardData.submittedMarks?.map(mark => (
+                  <li key={mark._id}>
+                    {mark.registerNumber} - {mark.subjectName} ({mark.sessionalType}): {mark.marks} ({mark.status})
+                  </li>
+                ))}
+              </ul>
             </div>
           </section>
         )}
