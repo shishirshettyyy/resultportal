@@ -1,4 +1,4 @@
-require('dotenv').config(); // Add at the top for environment variables
+require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
@@ -50,7 +50,7 @@ const sessionalMarksSchema = new mongoose.Schema({
   subjectName: { type: String, required: true },
   marks: { type: Number, required: true, min: 0, max: 100 },
   sessionalType: { type: String, required: true, enum: ['Sessional 1', 'Sessional 2', 'Sessional 3'] },
-  studentEmail: { type: String, required: true }, // New field for student email
+  studentEmail: { type: String, required: true },
   status: { type: String, default: 'Pending', enum: ['Pending', 'Approved', 'Rejected'] },
 });
 const SessionalMarks = mongoose.model('SessionalMarks', sessionalMarksSchema);
@@ -74,7 +74,7 @@ const transporter = nodemailer.createTransport({
     pass: process.env.EMAIL_PASS,
   },
   tls: {
-    rejectUnauthorized: false // Bypass SSL verification
+    rejectUnauthorized: false
   }
 });
 
@@ -177,7 +177,11 @@ app.post('/lecturer/login', async (req, res) => {
     return res.json({ success: false, message: 'Invalid credentials' });
   }
   const token = jwt.sign({ id: lecturer._id }, 'secret-key', { expiresIn: '1h' });
-  res.json({ success: true, token });
+  res.json({ 
+    success: true, 
+    token, 
+    name: lecturer.name // Return lecturer's name
+  });
 });
 
 app.post('/lecturer/sessional/add', authenticateLecturer, async (req, res) => {
@@ -305,4 +309,3 @@ app.get('/admin/lecturer/stats', async (req, res) => {
 app.listen(port, () => {
   console.log(`Server running on http://localhost:${port}`);
 });
-

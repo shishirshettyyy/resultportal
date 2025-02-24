@@ -14,6 +14,7 @@ function App() {
   const [analytics, setAnalytics] = useState({});
   const [lecturerStats, setLecturerStats] = useState([]);
   const [error, setError] = useState(null);
+  const [lecturerName, setLecturerName] = useState(''); // New state for lecturer name
 
   const [studentForm, setStudentForm] = useState({ registerNumber: '', semester: '' });
   const [adminForm, setAdminForm] = useState({ username: '', password: '' });
@@ -155,6 +156,7 @@ function App() {
       const res = await axios.post('/api/lecturer/login', lecturerForm);
       if (res.data.success) {
         localStorage.setItem('lecturerToken', res.data.token);
+        setLecturerName(res.data.name); // Store the lecturer's name
         setLecturerLoggedIn(true);
         setError(null);
       } else {
@@ -199,8 +201,6 @@ function App() {
     }
   };
 
- 
-  
   const generatePDF = (result) => {
     if (!result) {
       console.error("Result data is missing");
@@ -210,20 +210,17 @@ function App() {
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.getWidth();
   
-    // Header
     doc.setFontSize(18);
     doc.text("N.R.A.M Polytechnic, Nitte", pageWidth / 2, 10, { align: "center" });
     doc.setFontSize(14);
     doc.text("Result Details", pageWidth / 2, 20, { align: "center" });
   
-    // Student Info
     doc.setFontSize(12);
     doc.text(`Name: ${result.name}`, 10, 30);
     doc.text(`Register Number: ${result.registerNumber}`, 10, 40);
     doc.text(`Semester: ${result.semester}`, 10, 50);
     doc.text(`Branch: ${result.branch}`, 10, 60);
   
-    // Subject Table
     const tableData = result.subjects.map((subject) => [subject.subjectName, subject.marks]);
     doc.autoTable({
       head: [["Subject", "Marks"]],
@@ -231,23 +228,20 @@ function App() {
       startY: 70,
       theme: "striped",
       styles: { fontSize: 11 },
-      headStyles: { fillColor: [41, 128, 185], textColor: 255 }, // Blue Header
+      headStyles: { fillColor: [41, 128, 185], textColor: 255 },
     });
   
-    // Total Marks Table
     doc.autoTable({
       head: [["Total Marks", "Percentage", "Status"]],
       body: [[result.totalMarks, `${result.percentage}%`, result.status]],
       startY: doc.lastAutoTable.finalY + 10,
       theme: "grid",
       styles: { fontSize: 11 },
-      headStyles: { fillColor: [39, 174, 96], textColor: 255 }, // Green Header
+      headStyles: { fillColor: [39, 174, 96], textColor: 255 },
     });
   
-    // Save PDF
     doc.save(`${result.name}_${result.registerNumber}_result.pdf`);
   };
-  
 
   return (
     <div className="app-container">
@@ -286,8 +280,8 @@ function App() {
                     {result.subjects.length === 4 ? (
                       <>
                         <p>Total: {result.totalMarks}/400</p>
-                        <p>Percentage: ${result.percentage}%</p>
-                        <p>Status: ${result.status}</p>
+                        <p>Percentage: {result.percentage}%</p>
+                        <p>Status: {result.status}</p>
                         <button className="action-btn" onClick={() => generatePDF(result)}>Download PDF</button>
                       </>
                     ) : (
@@ -451,7 +445,7 @@ function App() {
         {/* Lecturer Dashboard */}
         {role === 'lecturer' && lecturerLoggedIn && (
           <section className="dashboard-section">
-            <h2 className="section-title">Lecturer Dashboard</h2>
+           <h2 className="section-title">Welcome {lecturerName}!!</h2>
             <div className="dashboard-stats">
               <p>Submitted Marks: {dashboardData.submittedMarks?.length || 0}</p>
             </div>
