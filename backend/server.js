@@ -1,3 +1,4 @@
+require('dotenv').config(); // Add at the top for environment variables
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
@@ -49,6 +50,7 @@ const sessionalMarksSchema = new mongoose.Schema({
   subjectName: { type: String, required: true },
   marks: { type: Number, required: true, min: 0, max: 100 },
   sessionalType: { type: String, required: true, enum: ['Sessional 1', 'Sessional 2', 'Sessional 3'] },
+  studentEmail: { type: String, required: true }, // New field for student email
   status: { type: String, default: 'Pending', enum: ['Pending', 'Approved', 'Rejected'] },
 });
 const SessionalMarks = mongoose.model('SessionalMarks', sessionalMarksSchema);
@@ -67,7 +69,13 @@ const authenticateLecturer = (req, res, next) => {
 // Email Setup
 const transporter = nodemailer.createTransport({
   service: 'gmail',
-  auth: { user: 'your-email@gmail.com', pass: 'your-app-password' },
+  auth: {
+    user: process.env.EMAIL_FROM,
+    pass: process.env.EMAIL_PASS,
+  },
+  tls: {
+    rejectUnauthorized: false // Bypass SSL verification
+  }
 });
 
 // Hardcoded Admin
@@ -79,10 +87,10 @@ const setupDefaultLecturers = async () => {
     const lecturerCount = await Lecturer.countDocuments();
     if (lecturerCount === 0) {
       const lecturers = [
-        { email: "lecturer1@college.com", password: await bcrypt.hash("password1", 10), name: "Lecturer One", lecturerId: "L001" },
-        { email: "lecturer2@college.com", password: await bcrypt.hash("password2", 10), name: "Lecturer Two", lecturerId: "L002" },
-        { email: "lecturer3@college.com", password: await bcrypt.hash("password3", 10), name: "Lecturer Three", lecturerId: "L003" },
-        { email: "lecturer4@college.com", password: await bcrypt.hash("password4", 10), name: "Lecturer Four", lecturerId: "L004" },
+        { email: "shridevi@college.com", password: await bcrypt.hash("password1", 10), name: "Shridevi", lecturerId: "L001" },
+        { email: "rajesh@college.com", password: await bcrypt.hash("password2", 10), name: "Rajesh", lecturerId: "L002" },
+        { email: "subramanya@college.com", password: await bcrypt.hash("password3", 10), name: "Subramanya", lecturerId: "L003" },
+        { email: "vinoda@college.com", password: await bcrypt.hash("password4", 10), name: "Vinoda", lecturerId: "L004" },
       ];
       await Lecturer.insertMany(lecturers);
       console.log("Default lecturers created successfully");
@@ -173,7 +181,7 @@ app.post('/lecturer/login', async (req, res) => {
 });
 
 app.post('/lecturer/sessional/add', authenticateLecturer, async (req, res) => {
-  const { registerNumber, semester, branch, subjectName, marks, sessionalType } = req.body;
+  const { registerNumber, semester, branch, subjectName, marks, sessionalType, studentEmail } = req.body;
   const sessionalMarks = new SessionalMarks({
     lecturerId: req.lecturer.id,
     registerNumber,
@@ -182,6 +190,7 @@ app.post('/lecturer/sessional/add', authenticateLecturer, async (req, res) => {
     subjectName,
     marks,
     sessionalType,
+    studentEmail,
   });
   await sessionalMarks.save();
   res.json({ message: 'Sessional marks added' });
@@ -195,7 +204,7 @@ app.get('/admin/sessional/pending', async (req, res) => {
 app.put('/admin/sessional/approve/:id', async (req, res) => {
   const sessional = await SessionalMarks.findByIdAndUpdate(req.params.id, { status: 'Approved' }, { new: true });
 
-  const { registerNumber, semester, branch, subjectName, marks, sessionalType } = sessional;
+  const { registerNumber, semester, branch, studentEmail } = sessional;
   const approvedMarks = await SessionalMarks.find({ 
     registerNumber, 
     semester, 
@@ -211,13 +220,13 @@ app.put('/admin/sessional/approve/:id', async (req, res) => {
   let result;
   if (subjects.length === 4) {
     const totalMarks = subjects.reduce((sum, subj) => sum + subj.marks, 0);
-    const percentage = (totalMarks / 400) * 100; // 4 subjects * 100 marks = 400
+    const percentage = (totalMarks / 400) * 100;
     const status = percentage >= 40 ? 'Pass' : 'Fail';
 
     result = await Result.findOneAndUpdate(
       { registerNumber, semester, branch },
       { 
-        name: registerNumber, // Replace with actual student name if available
+        name: registerNumber,
         registerNumber,
         semester,
         branch,
@@ -230,10 +239,24 @@ app.put('/admin/sessional/approve/:id', async (req, res) => {
     );
 
     transporter.sendMail({
-      from: 'your-email@gmail.com',
-      to: `${registerNumber}@student.com`,
+      from: process.env.EMAIL_FROM,
+      to: studentEmail,
       subject: 'Result Updated',
-      text: `Dear Student, your ${semester} result has been updated. Total: ${totalMarks}/400, Percentage: ${percentage}%`,
+      html: `
+        <h1>Result Updated</h1>
+        <p>Dear Student,</p>
+        <p>Your <strong>${semester}</strong> result has been updated:</p>
+        <ul>
+          ${subjects.map(subj => `<li>${subj.subjectName}: ${subj.marks}/100</li>`).join('')}
+        </ul>
+        <p><strong>Total:</strong> ${totalMarks}/400</p>
+        <p><strong>Percentage:</strong> ${percentage}%</p>
+        <p><strong>Status:</strong> ${status}</p>
+        <p>Check your dashboard for more details.</p>
+      `,
+    }, (err, info) => {
+      if (err) console.error('Error sending email:', err);
+      else console.log('Email sent:', info.response);
     });
   }
 
@@ -282,3 +305,4 @@ app.get('/admin/lecturer/stats', async (req, res) => {
 app.listen(port, () => {
   console.log(`Server running on http://localhost:${port}`);
 });
+

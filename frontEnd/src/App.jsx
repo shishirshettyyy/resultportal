@@ -27,6 +27,7 @@ function App() {
     subjectName: '',
     marks: '',
     sessionalType: 'Sessional 1',
+    studentEmail: '',
   });
 
   // Fetch Dashboards
@@ -171,7 +172,15 @@ function App() {
         headers: { Authorization: `Bearer ${localStorage.getItem('lecturerToken')}` },
       });
       alert('Sessional marks submitted');
-      setSessionalForm({ registerNumber: '', semester: '', branch: '', subjectName: '', marks: '', sessionalType: 'Sessional 1' });
+      setSessionalForm({ 
+        registerNumber: '', 
+        semester: '', 
+        branch: '', 
+        subjectName: '', 
+        marks: '', 
+        sessionalType: 'Sessional 1', 
+        studentEmail: '' 
+      });
       fetchLecturerDashboard();
       setError(null);
     } catch {
@@ -190,18 +199,55 @@ function App() {
     }
   };
 
+ 
+  
   const generatePDF = (result) => {
+    if (!result) {
+      console.error("Result data is missing");
+      return;
+    }
+  
     const doc = new jsPDF();
-    doc.text(`Result for ${result.registerNumber} - Semester ${result.semester}`, 10, 10);
+    const pageWidth = doc.internal.pageSize.getWidth();
+  
+    // Header
+    doc.setFontSize(18);
+    doc.text("N.R.A.M Polytechnic, Nitte", pageWidth / 2, 10, { align: "center" });
+    doc.setFontSize(14);
+    doc.text("Result Details", pageWidth / 2, 20, { align: "center" });
+  
+    // Student Info
+    doc.setFontSize(12);
+    doc.text(`Name: ${result.name}`, 10, 30);
+    doc.text(`Register Number: ${result.registerNumber}`, 10, 40);
+    doc.text(`Semester: ${result.semester}`, 10, 50);
+    doc.text(`Branch: ${result.branch}`, 10, 60);
+  
+    // Subject Table
+    const tableData = result.subjects.map((subject) => [subject.subjectName, subject.marks]);
     doc.autoTable({
-      head: [['Subject', 'Marks']],
-      body: result.subjects.map(s => [s.subjectName, s.marks]),
+      head: [["Subject", "Marks"]],
+      body: tableData,
+      startY: 70,
+      theme: "striped",
+      styles: { fontSize: 11 },
+      headStyles: { fillColor: [41, 128, 185], textColor: 255 }, // Blue Header
     });
-    doc.text(`Total Marks: ${result.totalMarks}/400`, 10, doc.lastAutoTable.finalY + 10);
-    doc.text(`Percentage: ${result.percentage}%`, 10, doc.lastAutoTable.finalY + 20);
-    doc.text(`Status: ${result.status}`, 10, doc.lastAutoTable.finalY + 30);
-    doc.save(`${result.registerNumber}_${result.semester}_result.pdf`);
+  
+    // Total Marks Table
+    doc.autoTable({
+      head: [["Total Marks", "Percentage", "Status"]],
+      body: [[result.totalMarks, `${result.percentage}%`, result.status]],
+      startY: doc.lastAutoTable.finalY + 10,
+      theme: "grid",
+      styles: { fontSize: 11 },
+      headStyles: { fillColor: [39, 174, 96], textColor: 255 }, // Green Header
+    });
+  
+    // Save PDF
+    doc.save(`${result.name}_${result.registerNumber}_result.pdf`);
   };
+  
 
   return (
     <div className="app-container">
@@ -240,8 +286,8 @@ function App() {
                     {result.subjects.length === 4 ? (
                       <>
                         <p>Total: {result.totalMarks}/400</p>
-                        <p>Percentage: {result.percentage}%</p>
-                        <p>Status: {result.status}</p>
+                        <p>Percentage: ${result.percentage}%</p>
+                        <p>Status: ${result.status}</p>
                         <button className="action-btn" onClick={() => generatePDF(result)}>Download PDF</button>
                       </>
                     ) : (
@@ -337,6 +383,7 @@ function App() {
                     <th>Subject</th>
                     <th>Marks</th>
                     <th>Sessional</th>
+                    <th>Email</th>
                     <th>Lecturer</th>
                     <th>Action</th>
                   </tr>
@@ -348,6 +395,7 @@ function App() {
                       <td>{mark.subjectName}</td>
                       <td>{mark.marks}</td>
                       <td>{mark.sessionalType}</td>
+                      <td>{mark.studentEmail}</td>
                       <td>{mark.lecturerId?.name || 'Unknown'}</td>
                       <td>
                         <button className="action-btn approve" onClick={() => handleApproval(mark._id, 'approve')}>Approve</button>
@@ -424,6 +472,13 @@ function App() {
                   <option value="Sessional 2">Sessional 2</option>
                   <option value="Sessional 3">Sessional 3</option>
                 </select>
+                <input 
+                  className="input-field" 
+                  placeholder="Student Email" 
+                  value={sessionalForm.studentEmail} 
+                  onChange={e => setSessionalForm({ ...sessionalForm, studentEmail: e.target.value })} 
+                  required 
+                />
                 <button className="submit-btn" type="submit">Submit Marks</button>
               </form>
             </div>
@@ -432,7 +487,7 @@ function App() {
               <ul className="submission-list">
                 {dashboardData.submittedMarks?.map(mark => (
                   <li key={mark._id}>
-                    {mark.registerNumber} - {mark.subjectName} ({mark.sessionalType}): {mark.marks} ({mark.status})
+                    {mark.registerNumber} - {mark.subjectName} ({mark.sessionalType}): {mark.marks} to {mark.studentEmail} ({mark.status})
                   </li>
                 ))}
               </ul>
