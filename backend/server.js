@@ -44,6 +44,7 @@ const Lecturer = mongoose.model('Lecturer', lecturerSchema);
 
 const sessionalMarksSchema = new mongoose.Schema({
   lecturerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Lecturer', required: true },
+  name: { type: String, required: true },
   registerNumber: { type: String, required: true },
   semester: { type: String, required: true },
   branch: { type: String, required: true },
@@ -181,8 +182,9 @@ app.post('/lecturer/login', async (req, res) => {
 });
 
 app.post('/lecturer/sessional/add', authenticateLecturer, async (req, res) => {
-  const { registerNumber, semester, branch, subjectName, marks, sessionalType, studentEmail } = req.body;
+  const { name, registerNumber, semester, branch, subjectName, marks, sessionalType, studentEmail } = req.body;
   const sessionalMarks = new SessionalMarks({
+    name,
     lecturerId: req.lecturer.id,
     registerNumber,
     semester,
@@ -204,8 +206,9 @@ app.get('/admin/sessional/pending', async (req, res) => {
 app.put('/admin/sessional/approve/:id', async (req, res) => {
   const sessional = await SessionalMarks.findByIdAndUpdate(req.params.id, { status: 'Approved' }, { new: true });
 
-  const { registerNumber, semester, branch, studentEmail } = sessional;
+  const { name, registerNumber, semester, branch, studentEmail } = sessional;
   const approvedMarks = await SessionalMarks.find({ 
+    name,
     registerNumber, 
     semester, 
     branch, 
@@ -224,9 +227,9 @@ app.put('/admin/sessional/approve/:id', async (req, res) => {
     const status = percentage >= 40 ? 'Pass' : 'Fail';
 
     result = await Result.findOneAndUpdate(
-      { registerNumber, semester, branch },
+      {name, registerNumber, semester, branch },
       { 
-        name: registerNumber,
+        name ,
         registerNumber,
         semester,
         branch,
@@ -245,7 +248,7 @@ app.put('/admin/sessional/approve/:id', async (req, res) => {
       html: `
         <h1>Result Updated</h1>
         <p>Dear Student,</p>
-        <p>Your <strong>${semester}</strong> result has been updated:</p>
+        <p>${name} your <strong>${semester}</strong> result has been updated:</p>
         <ul>
           ${subjects.map(subj => `<li>${subj.subjectName}: ${subj.marks}/100</li>`).join('')}
         </ul>

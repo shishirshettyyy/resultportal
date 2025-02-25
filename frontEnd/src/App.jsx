@@ -21,6 +21,7 @@ function App() {
   const [bulkFile, setBulkFile] = useState(null);
   const [lecturerForm, setLecturerForm] = useState({ email: '', password: '' });
   const [sessionalForm, setSessionalForm] = useState({
+    name: '',
     registerNumber: '',
     semester: '',
     branch: '',
@@ -173,6 +174,7 @@ function App() {
       });
       alert('Sessional marks submitted');
       setSessionalForm({ 
+       name: '',
         registerNumber: '', 
         semester: '', 
         branch: '', 
@@ -286,8 +288,8 @@ function App() {
                     {result.subjects.length === 4 ? (
                       <>
                         <p>Total: {result.totalMarks}/400</p>
-                        <p>Percentage: ${result.percentage}%</p>
-                        <p>Status: ${result.status}</p>
+                        <p>Percentage: {result.percentage}%</p>
+                        <p>Status: {result.status}</p>
                         <button className="action-btn" onClick={() => generatePDF(result)}>Download PDF</button>
                       </>
                     ) : (
@@ -379,6 +381,7 @@ function App() {
               <table className="data-table">
                 <thead>
                   <tr>
+                    <th>Name</th>
                     <th>Register Number</th>
                     <th>Subject</th>
                     <th>Marks</th>
@@ -391,6 +394,7 @@ function App() {
                 <tbody>
                   {pendingMarks.map(mark => (
                     <tr key={mark._id}>
+                      <td>{mark.name}</td>
                       <td>{mark.registerNumber}</td>
                       <td>{mark.subjectName}</td>
                       <td>{mark.marks}</td>
@@ -458,36 +462,95 @@ function App() {
             <div className="form-section">
               <h3 className="subtitle">Add Sessional Marks</h3>
               <form className="form-container" onSubmit={handleSessionalSubmit}>
-                <input className="input-field" placeholder="Register Number" value={sessionalForm.registerNumber} onChange={e => setSessionalForm({ ...sessionalForm, registerNumber: e.target.value })} />
-                <input className="input-field" placeholder="Semester" value={sessionalForm.semester} onChange={e => setSessionalForm({ ...sessionalForm, semester: e.target.value })} />
-                <input className="input-field" placeholder="Branch" value={sessionalForm.branch} onChange={e => setSessionalForm({ ...sessionalForm, branch: e.target.value })} />
-                <input className="input-field" placeholder="Subject Name" value={sessionalForm.subjectName} onChange={e => setSessionalForm({ ...sessionalForm, subjectName: e.target.value })} />
-                <input className="input-field" type="number" placeholder="Marks (0-100)" value={sessionalForm.marks} onChange={e => setSessionalForm({ ...sessionalForm, marks: Math.min(100, Math.max(0, parseInt(e.target.value) || 0)) })} />
-                <select
-                  className="input-field"
-                  value={sessionalForm.sessionalType}
-                  onChange={e => setSessionalForm({ ...sessionalForm, sessionalType: e.target.value })}
-                >
-                  <option value="Sessional 1">Sessional 1</option>
-                  <option value="Sessional 2">Sessional 2</option>
-                  <option value="Sessional 3">Sessional 3</option>
-                </select>
-                <input 
-                  className="input-field" 
-                  placeholder="Student Email" 
-                  value={sessionalForm.studentEmail} 
-                  onChange={e => setSessionalForm({ ...sessionalForm, studentEmail: e.target.value })} 
-                  required 
-                />
-                <button className="submit-btn" type="submit">Submit Marks</button>
-              </form>
+
+
+              <input className="input-field" 
+    placeholder="Name" 
+    value={sessionalForm.name} 
+    onChange={e => setSessionalForm({ ...sessionalForm, name: e.target.value })} 
+  />
+  <input 
+    className="input-field" 
+    placeholder="Register Number" 
+    value={sessionalForm.registerNumber} 
+    onChange={e => setSessionalForm({ ...sessionalForm, registerNumber: e.target.value })} 
+  />
+
+  {/* Semester Selection */}
+  <select
+    className="input-field"
+    value={sessionalForm.semester}
+    onChange={e => setSessionalForm({ ...sessionalForm, semester: e.target.value })}
+  >
+    <option value="">Select Semester</option>
+    <option value="Semester 1">Semester 1</option>
+    <option value="Semester 2">Semester 2</option>
+    <option value="Semester 3">Semester 3</option>
+    <option value="Semester 4">Semester 4</option>
+    <option value="Semester 5">Semester 5</option>
+    <option value="Semester 6">Semester 6</option>
+  </select>
+
+  {/* Branch Selection */}
+  <select
+    className="input-field"
+    value={sessionalForm.branch}
+    onChange={e => setSessionalForm({ ...sessionalForm, branch: e.target.value })}
+  >
+    <option value="">Select Branch</option>
+    <option value="Civil">Civil</option>
+    <option value="Computer Science">Computer Science</option>
+    <option value="Electrical and Electronics">Electrical and Electronics</option>
+    <option value="Electrical and Communication">Electrical and Communication</option>
+    <option value="Mechanical Engineering">Mechanical Engineering</option>
+    <option value="ADFT">ADFT</option>
+  </select>
+
+  <input 
+    className="input-field" 
+    placeholder="Subject Name" 
+    value={sessionalForm.subjectName} 
+    onChange={e => setSessionalForm({ ...sessionalForm, subjectName: e.target.value })} 
+  />
+
+  <input 
+    className="input-field" 
+    type="number" 
+    placeholder="Marks (0-100)" 
+    value={sessionalForm.marks} 
+    onChange={e => setSessionalForm({ ...sessionalForm, marks: Math.min(100, Math.max(0, parseInt(e.target.value) || 0)) })} 
+  />
+
+  {/* Sessional Type Selection */}
+  <select
+    className="input-field"
+    value={sessionalForm.sessionalType}
+    onChange={e => setSessionalForm({ ...sessionalForm, sessionalType: e.target.value })}
+  >
+    <option value="">Select Sessional Type</option>
+    <option value="Sessional 1">Sessional 1</option>
+    <option value="Sessional 2">Sessional 2</option>
+    <option value="Sessional 3">Sessional 3</option>
+  </select>
+
+  <input 
+    className="input-field" 
+    placeholder="Student Email" 
+    value={sessionalForm.studentEmail} 
+    onChange={e => setSessionalForm({ ...sessionalForm, studentEmail: e.target.value })} 
+    required 
+  />
+
+  <button className="submit-btn" type="submit">Submit Marks</button>
+</form>
+
             </div>
             <div className="table-section">
               <h3 className="subtitle">Your Submissions</h3>
               <ul className="submission-list">
                 {dashboardData.submittedMarks?.map(mark => (
                   <li key={mark._id}>
-                    {mark.registerNumber} - {mark.subjectName} ({mark.sessionalType}): {mark.marks} to {mark.studentEmail} ({mark.status})
+                   {mark.name}{mark.registerNumber} - {mark.subjectName} ({mark.sessionalType}): {mark.marks} to {mark.studentEmail} ({mark.status})
                   </li>
                 ))}
               </ul>
