@@ -506,12 +506,20 @@ function App() {
     <option value="ADFT">ADFT</option>
   </select>
 
-  <input 
+  <select
     className="input-field" 
     placeholder="Subject Name" 
     value={sessionalForm.subjectName} 
-    onChange={e => setSessionalForm({ ...sessionalForm, subjectName: e.target.value })} 
-  />
+    onChange={e => setSessionalForm({ ...sessionalForm, subjectName: e.target.value })}>
+
+    <option value="">Select Subject</option>
+    <option value="DSP">Data Structure with Python</option>
+    <option value="Java">Java</option>
+    <option value="OSA">Operating System and Administartion</option>
+    <option value="SE">Software Engineering</option>
+    
+  </select>
+  
 
   <input 
     className="input-field" 
