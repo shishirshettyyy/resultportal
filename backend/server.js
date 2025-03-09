@@ -28,6 +28,8 @@ const resultSchema = new mongoose.Schema({
   semester: String,
   branch: String,
   subjects: [{ subjectName: String, marks: Number }],
+  attendance: Number,
+  attendancestatus: String,
   totalMarks: Number,
   percentage: Number,
   status: String,
@@ -50,8 +52,10 @@ const sessionalMarksSchema = new mongoose.Schema({
   branch: { type: String, required: true },
   subjectName: { type: String, required: true },
   marks: { type: Number, required: true, min: 0, max: 100 },
+  attendance: { type: Number, required: true, min: 0, max: 100 },
+  attendancestatus: { type: String, enum: ['Eligible', 'NE'], default: 'NE' },
   sessionalType: { type: String, required: true, enum: ['Sessional 1', 'Sessional 2', 'Sessional 3'] },
-  studentEmail: { type: String, required: true }, // New field for student email
+  studentEmail: { type: String, required: true },
   status: { type: String, default: 'Pending', enum: ['Pending', 'Approved', 'Rejected'] },
 });
 const SessionalMarks = mongoose.model('SessionalMarks', sessionalMarksSchema);
@@ -118,6 +122,7 @@ app.post('/admin/login', (req, res) => {
 app.post('/results/bulk-upload', async (req, res) => {
   const { csvData } = req.body;
   const results = [];
+  const totalDays = 100; // Assuming total days is a constant for calculation
   const stream = Readable.from(Buffer.from(csvData, 'base64'));
   stream
     .pipe(csv())
@@ -127,12 +132,17 @@ app.post('/results/bulk-upload', async (req, res) => {
         .map(key => ({ subjectName: key.replace('subject_', ''), marks: parseInt(row[key]) || 0 }));
       const totalMarks = subjects.reduce((sum, subj) => sum + subj.marks, 0);
       const percentage = (totalMarks / (subjects.length * 100)) * 100;
+      const attendancePercentage = (parseInt(row.attendance) / totalDays) * 100; // Calculate attendance percentage
+      const attendancestatus = attendancePercentage >= 75 ? 'Eligible' : 'NE'; // Determine attendance status
+
       results.push({
         name: row.name,
         registerNumber: row.registerNumber,
         semester: row.semester,
         branch: row.branch,
         subjects,
+        attendance: attendancePercentage, // Store calculated attendance percentage
+        attendancestatus,
         totalMarks,
         percentage,
         status: percentage >= 40 ? 'Pass' : 'Fail',
@@ -145,14 +155,15 @@ app.post('/results/bulk-upload', async (req, res) => {
 });
 
 app.put('/results/edit/:id', async (req, res) => {
-  const { name, registerNumber, semester, branch, subjects } = req.body;
+  const { name, registerNumber, semester, branch, subjects, attendance } = req.body;
   const totalMarks = subjects.reduce((sum, subject) => sum + subject.marks, 0);
   const percentage = (totalMarks / (subjects.length * 100)) * 100;
+  const attendancestatus = attendance >= 75 ? 'Eligible' : 'NE'; // Calculate attendance status
   const status = percentage >= 40 ? 'Pass' : 'Fail';
 
   const updatedResult = await Result.findByIdAndUpdate(
     req.params.id,
-    { name, registerNumber, semester, branch, subjects, totalMarks, percentage, status },
+    { name, registerNumber, semester, branch, subjects, totalMarks, percentage, attendance, attendancestatus, status },
     { new: true }
   );
   res.json({ message: 'Result updated', result: updatedResult });
@@ -182,7 +193,9 @@ app.post('/lecturer/login', async (req, res) => {
 });
 
 app.post('/lecturer/sessional/add', authenticateLecturer, async (req, res) => {
-  const { name, registerNumber, semester, branch, subjectName, marks, sessionalType, studentEmail } = req.body;
+  const { name , registerNumber, semester, branch, subjectName, marks, attendance, sessionalType, studentEmail } = req.body;
+  const attendancestatus = attendance >= 75 ? 'Eligible' : 'NE'; // Calculate attendance status
+
   const sessionalMarks = new SessionalMarks({
     name,
     lecturerId: req.lecturer.id,
@@ -191,6 +204,8 @@ app.post('/lecturer/sessional/add', authenticateLecturer, async (req, res) => {
     branch,
     subjectName,
     marks,
+    attendance,
+    attendancestatus,
     sessionalType,
     studentEmail,
   });
@@ -206,12 +221,13 @@ app.get('/admin/sessional/pending', async (req, res) => {
 app.put('/admin/sessional/approve/:id', async (req, res) => {
   const sessional = await SessionalMarks.findByIdAndUpdate(req.params.id, { status: 'Approved' }, { new: true });
 
-  const { name, registerNumber, semester, branch, studentEmail } = sessional;
+  const { name, registerNumber, semester, branch, attendance, studentEmail } = sessional;
   const approvedMarks = await SessionalMarks.find({ 
     name,
     registerNumber, 
     semester, 
     branch, 
+    attendance,
     status: 'Approved' 
   });
 
@@ -224,19 +240,20 @@ app.put('/admin/sessional/approve/:id', async (req, res) => {
   if (subjects.length === 4) {
     const totalMarks = subjects.reduce((sum, subj) => sum + subj.marks, 0);
     const percentage = (totalMarks / 400) * 100;
-    const status = percentage >= 40 ? 'Pass' : 'Fail';
+    const attendancestatus = attendance >= 75 ? 'Eligible' : 'NEE'; // Calculate attendance status
 
     result = await Result.findOneAndUpdate(
-      {name, registerNumber, semester, branch },
+      { name, registerNumber, semester, branch },
       { 
-        name ,
+        name,
         registerNumber,
         semester,
         branch,
         subjects,
         totalMarks,
         percentage,
-        status,
+        status: percentage >= 40 ? 'Pass' : 'Fail',
+        attendancestatus,
       },
       { upsert: true, new: true }
     );
@@ -254,7 +271,8 @@ app.put('/admin/sessional/approve/:id', async (req, res) => {
         </ul>
         <p><strong>Total:</strong> ${totalMarks}/400</p>
         <p><strong>Percentage:</strong> ${percentage}%</p>
-        <p><strong>Status:</strong> ${status}</p>
+        <p><strong>Status:</strong> ${percentage >= 40 ? 'Pass' : 'Fail'}</p>
+        <p><strong>Attendance Status:</strong> ${attendancestatus}</p>
         <p>Check your dashboard for more details.</p>
       `,
     }, (err, info) => {
@@ -292,7 +310,7 @@ app.get('/admin/analytics', async (req, res) => {
   const results = await Result.find();
   const totalStudents = results.length;
   const passed = results.filter(r => r.status === 'Pass').length;
-  const avgPercentage = totalStudents ? (results.reduce((sum, r) => sum + r.percentage, 0) / totalStudents).toFixed(2) : 0;
+  const avgPercentage = totalStudents ? (results.reduce((sum, r) => sum + r.percentage , 0) / totalStudents).toFixed(2) : 0;
   res.json({ totalStudents, passed, failed: totalStudents - passed, avgPercentage });
 });
 
