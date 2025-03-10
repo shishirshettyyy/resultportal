@@ -1,4 +1,4 @@
-require('dotenv').config(); // Add at the top for environment variables
+require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
@@ -79,7 +79,7 @@ const transporter = nodemailer.createTransport({
     pass: process.env.EMAIL_PASS,
   },
   tls: {
-    rejectUnauthorized: false // Bypass SSL verification
+    rejectUnauthorized: false
   }
 });
 
@@ -189,7 +189,11 @@ app.post('/lecturer/login', async (req, res) => {
     return res.json({ success: false, message: 'Invalid credentials' });
   }
   const token = jwt.sign({ id: lecturer._id }, 'secret-key', { expiresIn: '1h' });
-  res.json({ success: true, token });
+  res.json({ 
+    success: true, 
+    token, 
+    name: lecturer.name // Return lecturer's name
+  });
 });
 
 app.post('/lecturer/sessional/add', authenticateLecturer, async (req, res) => {
